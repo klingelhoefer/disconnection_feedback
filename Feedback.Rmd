@@ -1,0 +1,697 @@
+---
+output: html_document
+runtime: shiny
+resource_files:
+- www/JP_LOGO.svg
+---
+
+####### TODO: 
+- Write explainer text for variables
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+if (!require("pacman")) install.packages("pacman"); library(pacman) #getting package manager ready
+pacman::p_load(shiny, tidyverse, DT, here, rsconnect, ggplot2, patchwork, lubridate) #installing+loading packages
+
+#Define central parameters
+
+## title of the web-app
+title = 'Feedback zur Studie "Abschalten"'
+
+## data for the web app
+#### logging
+#### setting up example data creation
+set.seed(284)
+pin_seed = c(123, rep(sample.int(999, 99)))
+data_log = NULL
+x = NULL
+
+#### reading data
+data = read.csv("dl_fe.csv")
+
+#### splitting datasets
+data_log = data %>% filter(version == 1) %>% mutate(date = ymd(date))
+data_nol = data %>% filter(version == 2) %>% mutate(date = ymd(date))
+rm(data)
+
+## setting up scale min/max
+scale_min_wb_ge = 1
+scale_max_wb_ge = 7
+scale_breaks_wb_ge = 1
+scale_min_wb_energy = 1
+scale_max_wb_energy = 7
+scale_breaks_wb_energy = 1
+scale_min_wb_stress = 1
+scale_max_wb_stress = 7
+scale_breaks_wb_stress = 1
+scale_min_wb_connect = 1
+scale_breaks_wb_connect = 7
+scale_min_wb_connect = 1
+scale_min_procra = 1
+scale_max_procra = 7
+scale_breaks_procra = 1
+scale_min_screentime_work = 0
+scale_max_screentime_work = 120
+scale_breaks_screentime_work = 10
+scale_min_screentime_leisure = 0
+scale_max_screentime_leisure = 120
+scale_breaks_screentime_leisure = 10
+
+
+# WITH LOGGING: Calculating regression coefficient and intercept for whole data-subset
+## wb_ge
+lm_wb_ge = lm(wb_ge~date, data = data_log)
+intercept_wb_ge = as.numeric(lm_wb_ge$coefficients['(Intercept)'])
+slope_wb_ge = as.numeric(lm_wb_ge$coefficients[2])
+rm(lm_wb_ge) #removing model
+
+##wb_energy
+lm_wb_energy = lm(wb_energy~date, data = data_log)
+intercept_wb_energy = as.numeric(lm_wb_energy$coefficients['(Intercept)'])
+slope_wb_energy = as.numeric(lm_wb_energy$coefficients[2])
+rm(lm_wb_energy)
+
+## screentime_work
+lm_screentime_work = lm(screentime_work~date, data = data_log)
+intercept_screentime_work = as.numeric(lm_screentime_work$coefficients['(Intercept)'])
+slope_screentime_work = as.numeric(lm_screentime_work$coefficients[2])
+
+## screentime_leisure
+lm_screentime_leisure = lm(screentime_leisure~date, data = data_log)
+intercept_screentime_leisure = as.numeric(lm_screentime_leisure$coefficients['(Intercept)'])
+slope_screentime_leisure = as.numeric(lm_screentime_leisure$coefficients[2])
+
+#creating data frame from intercept and slope variables
+slope_log = data.frame(intercept_wb_ge, slope_wb_ge, intercept_screentime_work, slope_screentime_work, intercept_screentime_leisure, slope_screentime_leisure)
+
+##########XXXXX generate no logging data later
+data_nol = NULL
+#XXXX NEEDS TO BE CREATED XXXXXXXX
+
+
+
+
+## Defining vector that includes all possible variables
+selectable_variables = c(
+  "Keine Auswahl" = 0,
+  "Wohlbefinden (Tagesdurchschnitt)" = "wb_ge",
+  "Berufliche/Schulische Mediennutzung" = "screentime_work",
+  "Freizeitbezogene Mediennutzung" = "screentime_leisure"
+  )
+
+## Defining vector that allows selection of trend line
+selectable_trends = c(
+  "Keine Auswahl" = 0,
+  "Geglättete Trendlinie" = "loess",
+  "Regressionslinie" = "lm"
+  )
+
+#Defining colors for graph
+color_1 = "#04316A"
+color_2 = "#C50F3C"
+
+#converting colors to rgb (needed for svg output)
+rgb_color_1 = col2rgb(color_1)
+rgb_color_2 = col2rgb(color_2)
+
+
+##text to display for access code
+acess_code_text = "Zugangscode"
+##text to display for pin
+pin_text = "Pin"
+##text to display notice
+notice_text = ""
+##text to display for study version
+study_version_text = "An welcher Variante der Studie haben Sie teilgenommen (Reminder: Sie konnten in der Vorbefragung aus zwei Möglichkeiten auswählen: Mit Aufzeichnung von Metadaten und ohne Aufzeichnung von Metadaten)"
+## option 0 to display for study version
+study_version_text_0 = "Keine Auswahl"
+## option 1 to display for study version
+study_version_text_1 = "Mit Aufzeichnung der Metadaten ('Logging')"
+## option 2 to display for study version
+study_version_text_2 = "Ohne Aufzeichnung der Metadaten (kein 'Logging')"
+##text to display on submit button
+submit_text = "weiter"
+##text to display on unsubmit button
+unsubmit_text = "Logout"
+##passphrase for login
+acess_code_master = "123"
+
+#Variable output-text generation
+explainer_wb = "<h4>Wohlbefinden</h4> wurde mit einer einzelnen Frage gemessen, in der danach gefragt wurde, wie gut bzw. schlecht Sie sich gefühlt haben. "
+
+
+```
+
+
+
+```{r input, echo=FALSE}
+# Define UI for app
+ui = fluidPage(
+  
+  # App title
+  mainPanel(
+    width = 12,
+    htmlOutput("title_panel")  
+  ),
+  
+#Sidebar layout with input and output definitions
+sidebarLayout(
+  #side panel for input
+  sidebarPanel(
+      width = 4,
+      
+      #displaying login instruction
+      htmlOutput("login_instructions"),
+      
+      #Displaying legend and Selection of variable 1
+      #inserting break
+      htmlOutput("break_1"),
+      htmlOutput("var_selection_legend_1"),
+      uiOutput("var_selection_1"),
+
+      #displaying regression selection variable 1
+      uiOutput("reg_selection_1"),
+      
+      #displaying comparison to group regression selection variable 1
+      uiOutput("mean_selection_1"),
+      
+      #inserting break
+      htmlOutput("break_2"),
+
+    
+      #Displaying legend and selection of variable 2
+      htmlOutput("var_selection_legend_2"),
+      uiOutput("var_selection_2"),
+
+      #displaying regression selection variable 2
+      uiOutput("reg_selection_2"),
+      
+      #displaying comparison to group regression selection variable 1
+      uiOutput("mean_selection_2"),
+      
+
+      
+
+    ) ,
+  # Main panel for displaying outputs
+  mainPanel(
+    width = 8,
+      
+            #Display Login panel
+      renderText(acesss_code_output),
+      uiOutput("login_panel"),
+      
+      #Display warning messages
+      span(textOutput("text"),
+           textOutput("clicked_out"),
+           style="color:red"),
+      
+      
+      textOutput("debug_output"),
+      dataTableOutput("debug_table"),
+      verbatimTextOutput("print"),
+      div(plotOutput("plot_wb", width = "100%"),
+      style = "width: 100%;"), class = "center",
+    
+      #displaying date selection
+      uiOutput("slider_panel"),
+    
+      #displaying unsubmit button
+      div(uiOutput("unsubmit"), style = "float:right; margin-top:20%")
+      
+      
+      
+      
+      
+      
+      
+    )
+  )
+)
+
+
+#setting CSS style for output 
+tags$style(HTML("
+
+      "))
+
+```
+
+
+
+```{r server, echo=FALSE}
+
+#define server
+server = function(input, output, session) {
+  
+  output$title_panel = renderUI(
+      HTML(paste0('
+        <div style = "display: flex; flex-wrap: wrap; justify-content:space-between; align-items:center;">
+          <div style = "width:30%; min-width:200px;">
+            <h1 style = "padding:0; margin:auto;">',
+            title,
+            '</h1>
+          </div>
+          <div style = "width: 30%; min-width: 200px;"> 
+          <img src ="https://www.kommunikationswissenschaft.rw.fau.de/files/2022/08/JP_LOGO.svg" width = "100%"> 
+          </div>
+        </div>
+        <hr>
+      ')
+    )
+  )
+  
+  output$side_panel = renderUI(
+      HTML(paste0('
+        <div style = "display: flex; flex-wrap: wrap; justify-content:space-between; align-items:center;">
+          <div style = "width:30%; min-width:200px;">
+            <h1 style = "padding:0; margin:auto;">',
+            title,
+            '</h1>
+          </div>
+          <div style = "width: 30%; min-width: 200px;"> 
+          <img src ="https://www.kommunikationswissenschaft.rw.fau.de/files/2022/08/JP_LOGO.svg" width = "100%"> 
+          </div>
+        </div>
+        <hr>
+      ')
+    )
+  )
+  
+  #rendering password panel
+  output$login_panel = renderUI({
+    if(clicked_r() == 0)
+    {
+      tagList(
+        # Input: access code
+        textInput(inputId = "access_in",
+                  label = acess_code_text),
+        #Input: pin
+        passwordInput(inputId = "pin_in",
+                      label = pin_text),
+        #Input: study_version
+        radioButtons(inputId = "study_version",
+                     label = study_version_text,   
+                     choiceNames = list(
+                       study_version_text_0,
+                       study_version_text_1,
+                       study_version_text_2
+                     ),
+                     choiceValues = list(
+                       0, 1, 2
+                     )
+        ),
+        #Input: Submit button
+        actionButton("submit", submit_text),  
+      )
+    }
+  })
+  
+  #rendering breaks
+  output$login_instructions = renderUI({if(clicked_r() == 0)HTML("<h4>Bitte geben Sie ihre Login-Daten ein</h4>")})
+  output$break_1 = renderUI({if(auth())HTML("<h4><strong>Variable auswählen</strong></h4>")})
+  output$break_2 = renderUI({if(auth())HTML("<br><br><hr><h4><strong>Weitere Variable hinzufügen</strong></h4>")})
+  
+
+  # checking if access code is correct
+  access_r = 
+    reactive({input$access_in}) %>% 
+    bindCache(input$access_in ) %>% 
+    bindEvent(input$submit)
+  
+  
+  #saving pin upon clicking button
+  pin_r = 
+    reactive({input$pin_in}) %>% 
+    bindCache(input$pin_in ) %>% 
+    bindEvent(input$submit)
+  
+  #saving which version upon clicking button
+  study_version_r = 
+    reactive({c(as.numeric(input$study_version))}) %>% 
+    bindCache({c(as.numeric(input$study_version))}) %>% 
+    bindEvent({input$submit})
+  
+  #saving if submit button was pressed
+  clicked_r = reactiveVal(0)
+  observeEvent(input$submit,{
+    clicked_r(1) 
+  })
+  #Generating unsubmit buttion
+  output$unsubmit = renderUI({
+      if (clicked_r() == 1)
+    {
+      actionButton("unsubmit", unsubmit_text) 
+    }
+  })
+  
+  #saving if unsubmit button was pressed
+  observeEvent(input$unsubmit, {
+    clicked_r(0)
+  })
+  
+  
+  #Displaying error messages   
+  output$text = renderText({
+    if(
+      study_version_r() == 0
+    )
+    {
+      "bitte treffen Sie eine Auswahl, welche Variante der Studie Sie bearbeitet haben."
+    }
+    else if (toString(access_r()) != acess_code_master)
+    {
+      "Falscher Zugangscode"
+    }
+    else if (
+      (((!(as.numeric(pin_r()) %in% as.numeric(data_log$pin)) & study_version_r() == 1)) | 
+      ((!(as.numeric(pin_r()) %in% as.numeric(data_nol$pin)) & study_version_r() == 2))) &
+      clicked_r() == 1
+    )
+    {
+      "Falsche Pin"
+    }
+    
+    else if (
+      !((as.numeric(pin_r()) %in% as.numeric(data_nol$pin))) & study_version_r() == 2 & clicked_r() == 0
+    )
+    {
+      "Falsche Pin"
+    }
+    
+  })  
+  
+  #creating reactive that saves if authentification was successful 
+  auth = reactive({
+    if(
+      (as.numeric(pin_r()) %in% as.numeric(data_log$pin) & study_version_r() == 1 & clicked_r() == 1 & toString(access_r()) == acess_code_master) |
+      (as.numeric(pin_r()) %in% as.numeric(data_nol$pin) & study_version_r() == 2 & clicked_r() == 1 & toString(access_r()) == acess_code_master)
+    )
+    {TRUE}
+    else {FALSE}
+  })
+  
+
+
+ #rendering htmloutput to display Legend for second y-variable
+  output$var_selection_legend_1 = renderUI(
+    if(auth())
+    {
+      HTML(paste0(
+      '<svg height=".5em" width="2em">
+      <line x1="0" y1=".15em" x2="2em" y2=".15em" style="stroke-width:3; stroke:rgb(',
+      rgb_color_1[1],
+      ',',
+      rgb_color_1[2],
+      ',',
+      rgb_color_1[3],
+      ')"/> </svg> 
+      <span style="font-size:14px; font-weight: bold;">Variable 1 (blau)</span>
+      '))
+    }
+  )
+  #rendering output for selecting the first variable
+  output$var_selection_1 = renderUI({
+    if(auth())
+    {
+      tagList(
+        # Input: selecting first y-variable
+         selectInput(inputId = "var_selection_1",
+                label = NULL,
+                choices = selectable_variables[which(selectable_variables != 0)],
+                selected = selectable_variables[2])
+      )
+    }
+  })
+ #rendering htmloutput to display Legend for second y-variable
+  output$var_selection_legend_2 = renderUI(
+    if(auth())
+    {
+      HTML(paste0(
+      '<svg height=".5em" width="2em">
+      <line x1="0" y1=".15em" x2="2em" y2=".15em" stroke-dasharray="4" style="stroke-width:3; stroke:rgb(',
+      rgb_color_2[1],
+      ',',
+      rgb_color_2[2],
+      ',',
+      rgb_color_2[3],
+      ')"/> </svg> 
+      <span style="font-size:14px; font-weight: bold;">Variable 2 (rot, gestrichelt)</span>
+      '))
+    }
+  )
+#rendering output for selecting the second variable
+  output$var_selection_2 = renderUI({
+    if(auth())
+    {
+      tagList(
+        # Input: Selecting second y-variable
+         selectInput(inputId = "var_selection_2",
+                label = NULL,
+                choices = selectable_variables[names(which(selectable_variables != input$var_selection_1))],
+                selected = 0)
+      )
+    }
+  })
+  
+#rendering output for selecting first regression line
+  output$reg_selection_1 = renderUI({
+    if(auth())
+    {
+      tagList(
+        # Input: slecting smoothing
+         selectInput(inputId = "reg_selection_1",
+                label = paste0('Optional: Trendlinie für ', names(which(selectable_variables == input$var_selection_1))),
+                choices = selectable_trends,
+                selected = 0)
+      )
+    }
+  })
+
+#rendering output for selecting second regression line
+  output$reg_selection_2 = renderUI({
+    if(auth()
+       & input$var_selection_2 != 0)
+    {
+      tagList(
+        # Input: slecting smoothing
+         selectInput(inputId = "reg_selection_2",
+                label = paste0('Optional: Trendlinie für ', names(which(selectable_variables == input$var_selection_2))),
+                choices = selectable_trends,
+                selected = 0)
+      )
+    }
+  })
+  
+  #rendering output for 1st comparison to group regression line
+  output$mean_selection_1 = renderUI({
+    if(auth())
+    {
+      tagList(
+        # Input: slecting smoothing
+         selectInput(inputId = "mean_selection_1",
+                label = paste0('Optional: Vergleich mit Gruppenmittelwert für ', 
+                               names(which(selectable_variables == input$var_selection_1, 
+                                           " anzeigen?"))),
+                choices = c("Nein" = 0, "Ja" = 1),
+                selected = 0)
+      )
+    }
+  })
+  
+  #rendering output for 2nd comparison to group regression line
+  output$mean_selection_2 = renderUI({
+    if(auth() & 
+       input$var_selection_2 != 0)
+    {
+      tagList(
+        # Input: slecting smoothing
+         selectInput(inputId = "mean_selection_2",
+                label = paste0('Optional: Vergleich mit Gruppenmittelwert für ', 
+                               names(which(selectable_variables == input$var_selection_2, 
+                                           " anzeigen?"))),
+                choices = c("Nein" = 0, "Ja" = 1),
+                selected = 0)
+      )
+    }
+  })
+  
+  
+  #rendering slider panel
+  output$slider_panel = renderUI({
+    if(auth())
+      {
+   
+      sliderInput(
+                  "date_range", 
+                  "Start- und Endtag:",
+                  min = min(as.Date(data_r()$date)), 
+                  max = max(as.Date(data_r()$date)),
+                  value = c(
+                    min(as.Date(data_r()$date)),
+                    max(as.Date(data_r()$date))
+                    ),
+                  #animate = TRUE #uncomment to allow to go through each day,
+                  width = "100%"
+                  )
+      }
+    })
+  
+
+  #Generating filtered data
+  data_r = reactive({
+      if (
+        as.numeric(pin_r()) %in% as.numeric(data_log$pin) & study_version_r() == 1 & clicked_r() == 1 & toString(access_r()) == acess_code_master
+      )
+      {
+        data_log %>% filter(pin == pin_r())
+      }
+      else if (
+        as.numeric(pin_r()) %in% as.numeric(data_nol$pin) & study_version_r() == 2 & clicked_r() == 1 & toString(access_r()) == acess_code_master
+      )
+      {
+        data_nol %>%  filter(pin == pin_r())
+      }
+      else
+      {
+        NULL
+      }
+    })
+  
+  #Selecting mean for the appropriate group
+  slope_r = reactive({
+      if (
+        as.numeric(pin_r()) %in% as.numeric(data_log$pin) & study_version_r() == 1 & clicked_r() == 1 & toString(access_r()) == acess_code_master
+      )
+      {
+        slope_log
+      }
+      else if (
+        as.numeric(pin_r()) %in% as.numeric(data_nol$pin) & study_version_r() == 2 & clicked_r() == 1 & toString(access_r()) == acess_code_master
+      )
+      {
+        slope_nol
+      }
+      else
+      {
+        NULL
+      }
+    })
+  
+  #creating coefficient variable to scale second y-axis properly
+  coeff = reactive({
+    if (input$var_selection_2 != 0)
+    {
+      eval(as.name(paste0("scale_max_", toString(input$var_selection_2))))/
+      eval(as.name(paste0("scale_max_", toString(input$var_selection_1))))
+    }
+    else {1}
+  })  
+  
+#output$print = renderPrint(as.numeric(slope_r()[paste0("intercept_", input$var_selection_2)]))
+  
+#generating plot
+  
+plot = reactive({ 
+  ggplot(data = data_r(), aes(x = date)) +             
+    geom_line(aes(y = eval(as.name(input$var_selection_1))), color = color_1)+
+    geom_point(aes(y = eval(as.name(input$var_selection_1))), color = color_1, size = 3)+                                                             
+    ylab(names(which(selectable_variables == input$var_selection_1))) +
+    xlab("Datum")+
+    scale_x_date(
+      date_labels = "%d. %m.", 
+      date_breaks = "2 day",
+      limits = c(
+        min(input$date_range), 
+        max(input$date_range)
+        )
+      ) + 
+    scale_y_continuous( #defining breaks
+      breaks = seq(
+        eval(as.name(paste0("scale_min_", toString(input$var_selection_1)))), #using pre-defined min and max values
+        eval(as.name(paste0("scale_max_", toString(input$var_selection_1)))), 
+        by = eval(as.name(paste0("scale_breaks_", toString(input$var_selection_1))))), 
+      limits = c(
+        eval(as.name(paste0("scale_min_", toString(input$var_selection_1)))),
+        eval(as.name(paste0("scale_max_", toString(input$var_selection_1))))),
+    ) +
+    theme_bw()+
+    theme(
+      axis.line.y.right = element_line(color = color_2),                                        #styling second axis
+      axis.ticks.y.right = element_line(color = color_2),
+      axis.title.y.right = element_text(color = color_2, margin = margin(t = 0, r = 0, b = 0, l = 10)),
+      axis.text.y.right = element_text(color = color_2),
+      axis.line.y.left = element_line(color = color_1),                                        #styling second axis
+      axis.ticks.y.left = element_line(color = color_1),
+      axis.title.y.left = element_text(color = color_1, margin = margin(t = 0, r = 10, b = 0, l = 0)),
+      axis.text.y.left = element_text(color = color_1),
+    )+
+    theme(
+      #plot.background = element_rect(fill = "green"),
+      panel.grid.major = element_line(color = rgb(.2, .2, .2, .1))
+      )+
+  {if(input$var_selection_2 != 0) 
+    geom_line(aes(y = eval(as.name(input$var_selection_2))/coeff()), color = color_2, linetype = "dashed", alpha = .5)               #adding second variable /coeff() scales the variable to dimension
+  }+
+  {if(input$var_selection_2 != 0) 
+    geom_point(aes(y = eval(as.name(input$var_selection_2))/coeff()), color = color_2, size = 3, shape = 4, alpha = .5)               #adding dots (also scaled)
+  }+
+    
+    {if(input$var_selection_2 != 0) 
+    scale_y_continuous(
+      sec.axis = sec_axis(
+        trans=~.*coeff(),                                                       #using reactive "coeff()" to scale 2nd y-axis
+        name = names(which(selectable_variables == input$var_selection_2)),
+        # #breaks = seq(
+        #   from = eval(as.name(paste0("scale_min_", toString(input$var_selection_2)))), 
+        #   to = eval(as.name(paste0("scale_max_", toString(input$var_selection_2)))),
+        #   length.out = (eval(as.name(paste0("scale_breaks_", toString(input$var_selection_2))))),
+        #   
+        # )
+        ),
+        breaks = seq(
+          eval(as.name(paste0("scale_min_", toString(input$var_selection_1)))),                     #using pre-defined minimum and maximum values
+          eval(as.name(paste0("scale_max_", toString(input$var_selection_1)))), 
+          by = eval(as.name(paste0("scale_breaks_", toString(input$var_selection_1))))), 
+        limits = c(
+          eval(as.name(paste0("scale_min_", toString(input$var_selection_1)))),
+          eval(as.name(paste0("scale_max_", toString(input$var_selection_1))))),
+    )               
+  }+
+  {if(input$reg_selection_1 != 0) stat_smooth(aes(y = eval(as.name(input$var_selection_1))), method = toString(input$reg_selection_1), se = 0, color = color_1)}+
+  {if(input$reg_selection_2 != 0 & input$var_selection_2 != 0) stat_smooth(aes(y = eval(as.name(input$var_selection_2))/coeff()), method = toString(input$reg_selection_2), se = 0, color = color_2, linetype = "dashed")}+
+  theme(
+    axis.text=element_text(size=12),
+    axis.title=element_text(size=14,face="bold")
+    )+
+    {if(input$mean_selection_1 != 0) geom_abline(intercept = as.numeric(slope_r()[paste0("intercept_", input$var_selection_1)]), slope = as.numeric(slope_r()[paste0("slope_", input$var_selection_1)]), color = color_1, alpha = .3, size = 4)} +
+    {if(input$mean_selection_2 != 0 & input$var_selection_2 !=0) geom_abline(intercept = as.numeric(slope_r()[paste0("intercept_", input$var_selection_2)])/coeff(), slope = as.numeric(slope_r()[paste0("slope_", input$var_selection_2)])/coeff(), color = color_2, alpha = .3, size = 4, linetype = "longdash")} 
+
+    
+
+
+  })
+
+  #outputting plot
+  output$plot_wb = renderPlot({
+    if(
+      (as.numeric(pin_r()) %in% as.numeric(data_log$pin) & study_version_r() == 1 & clicked_r() == 1 & toString(access_r()) == acess_code_master) |
+      (as.numeric(pin_r()) %in% as.numeric(data_nol$pin) & study_version_r() == 2 & clicked_r() == 1 & toString(access_r()) == acess_code_master)
+    )
+    {
+    plot()
+     }
+    }, res = 72)
+
+
+}
+```
+
+
+```{r shiny, echo=FALSE}
+
+shinyApp(ui = ui, server = server, session, options = list(height = 1000))
+
+```
