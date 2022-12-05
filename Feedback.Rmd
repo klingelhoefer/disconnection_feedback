@@ -5,9 +5,6 @@ resource_files:
 - www/JP_LOGO.svg
 ---
 
-####### TODO: 
-- Write explainer text for variables
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
@@ -18,15 +15,10 @@ pacman::p_load(shiny, tidyverse, DT, here, rsconnect, ggplot2, patchwork, lubrid
 #Define central parameters
 
 ## title of the web-app
-title = 'Feedback zur Studie "Abschalten"'
+title = 'Studienfeedback'
 
 ## data for the web app
 #### logging
-#### setting up example data creation
-set.seed(284)
-pin_seed = c(123, rep(sample.int(999, 99)))
-data_log = NULL
-x = NULL
 
 #### reading data
 data = read.csv("dl_fe.csv")
@@ -34,71 +26,70 @@ data = read.csv("dl_fe.csv")
 #### splitting datasets
 data_log = data %>% filter(version == 1) %>% mutate(date = ymd(date))
 data_nol = data %>% filter(version == 2) %>% mutate(date = ymd(date))
-rm(data)
 
 ## setting up scale min/max
 scale_min_wb_ge = 1
 scale_max_wb_ge = 7
 scale_breaks_wb_ge = 1
+
 scale_min_wb_energy = 1
 scale_max_wb_energy = 7
 scale_breaks_wb_energy = 1
+
 scale_min_wb_stress = 1
 scale_max_wb_stress = 7
 scale_breaks_wb_stress = 1
+
 scale_min_wb_connect = 1
-scale_breaks_wb_connect = 7
-scale_min_wb_connect = 1
-scale_min_procra = 1
-scale_max_procra = 7
-scale_breaks_procra = 1
+scale_max_wb_connect = 7
+scale_breaks_wb_connect = 1
+
 scale_min_screentime_work = 0
 scale_max_screentime_work = 120
 scale_breaks_screentime_work = 10
+
 scale_min_screentime_leisure = 0
 scale_max_screentime_leisure = 120
 scale_breaks_screentime_leisure = 10
 
+scale_min_procra = 1
+scale_max_procra = 7
+scale_breaks_procra = 1
 
-# WITH LOGGING: Calculating regression coefficient and intercept for whole data-subset
-## wb_ge
-lm_wb_ge = lm(wb_ge~date, data = data_log)
-intercept_wb_ge = as.numeric(lm_wb_ge$coefficients['(Intercept)'])
-slope_wb_ge = as.numeric(lm_wb_ge$coefficients[2])
-rm(lm_wb_ge) #removing model
+scale_min_disco = 0
+scale_max_disco = 1
+scale_breaks_disco = .1
 
-##wb_energy
-lm_wb_energy = lm(wb_energy~date, data = data_log)
-intercept_wb_energy = as.numeric(lm_wb_energy$coefficients['(Intercept)'])
-slope_wb_energy = as.numeric(lm_wb_energy$coefficients[2])
-rm(lm_wb_energy)
+scale_min_goal_conf = 1
+scale_max_goal_conf = 7
+scale_breaks_goal_conf = 1
 
-## screentime_work
-lm_screentime_work = lm(screentime_work~date, data = data_log)
-intercept_screentime_work = as.numeric(lm_screentime_work$coefficients['(Intercept)'])
-slope_screentime_work = as.numeric(lm_screentime_work$coefficients[2])
+# Calculating grand means 
+mean_wb_ge = mean(data$wb_ge, na.rm = T)
+mean_wb_energy = mean(data$wb_energy, na.rm = T)
+mean_wb_stress = mean(data$wb_stress, na.rm = T)
+mean_wb_connect = mean(data$wb_connect, na.rm = T)
+mean_screentime_work = mean(data$screentime_work, na.rm = T)
+mean_screentime_leisure = mean(data$screentime_leisure, na.rm = T)
+mean_procra = mean(data$procra, na.rm = T)
+mean_disco = mean(data$disco, na.rm = T)
+mean_goal_conf = mean(data$goal_conf, na.rm = T)
 
-## screentime_leisure
-lm_screentime_leisure = lm(screentime_leisure~date, data = data_log)
-intercept_screentime_leisure = as.numeric(lm_screentime_leisure$coefficients['(Intercept)'])
-slope_screentime_leisure = as.numeric(lm_screentime_leisure$coefficients[2])
-
-#creating data frame from intercept and slope variables
-slope_log = data.frame(intercept_wb_ge, slope_wb_ge, intercept_screentime_work, slope_screentime_work, intercept_screentime_leisure, slope_screentime_leisure)
-
-##########XXXXX generate no logging data later
-data_nol = NULL
-#XXXX NEEDS TO BE CREATED XXXXXXXX
-
-
-
+# Adding means to a data frame
+means = data.frame(mean_wb_ge, mean_wb_energy, mean_wb_stress, mean_wb_connect, mean_screentime_work, mean_screentime_leisure, mean_procra, mean_disco, mean_goal_conf)
 
 ## Defining vector that includes all possible variables
 selectable_variables = c(
   "Keine Auswahl" = 0,
-  "Wohlbefinden (Tagesdurchschnitt)" = "wb_ge",
-  "Berufliche/Schulische Mediennutzung" = "screentime_work",
-  "Freizeitbezogene Mediennutzung" = "screentime_leisure"
+  "Wohlbefinden" = "wb_ge",
+  "Nutzungseinschränkung" = "disco",
+  "Energie" = "wb_energy",
+  "Stress" = "wb_stress",
+  "Verbundenheit" = "wb_connect",
+  "Berufl.-/Lern-Mediennutzung" = "screentime_work",
+  "Freizeitbezogene Mediennutzung" = "screentime_leisure",
+  "Prokrastination" = "procra",
+  "Zielkonflikt" = "goal_conf"
   )
 
 ## Defining vector that allows selection of trend line
@@ -136,11 +127,26 @@ submit_text = "weiter"
 ##text to display on unsubmit button
 unsubmit_text = "Logout"
 ##passphrase for login
-acess_code_master = "123"
+acess_code_master = "5184"
 
 #Variable output-text generation
-explainer_wb = "<h4>Wohlbefinden</h4> wurde mit einer einzelnen Frage gemessen, in der danach gefragt wurde, wie gut bzw. schlecht Sie sich gefühlt haben. "
+explainer_wb_ge = "<strong> Allgemeines Wohlbefinden</strong>: Diese Variable erfasst, wie Sie sich im Moment der Befragung im Allgemeinen gefühlt haben und wurde mit einer Frage gemessen, die danach fragte, wie gut bzw. schlecht Sie sich gefühlt haben. Die Werte können von 1 bis 7 reichen. Hohe Werte bedeuten ein hohes Wohlbefinden und niedrige Werte niedriges Wohlbefinden. Die Darstellung im Diagramm zeigt den Tagesdurchschnitt."
 
+explainer_wb_energy = "<strong>Energie</strong>: Diese Variable erfasst, wie energiegeladen oder aktiviert Sie sich gefühlt haben. Hohe Werte auf der Skala von 1 bis 7 zeigen, dass Sie sich voller Energie gefühlt haben. Die Darstellung im Diagramm zeigt den Tagesdurchschnitt."
+
+explainer_wb_stress = "<strong>Stress</strong>: Diese Frage misst, wie gestresst Sie sich im Moment der Befragung gefühlt haben. Hohe Werte auf der Stress-Skala von 1 bis 7 zeigen, dass Sie sich stärker gestrest gefühlt haben. Die Darstellung im Diagramm zeigt den Tagesdurchschnitt."
+
+explainer_wb_connect = "<strong>Verbundenheit</strong>: Die Frage nach Verbundenheit mit anderen soll erfassen, wie eingebunden Sie sich in diesem Moment in Ihr soziales Umfeld gefühlt haben. Hohe Werte auf der Skala von 1 bis 7 zeigen, dass Sie sich stärker mit anderen Verbunden und nicht einsam gefühlt haben. Die Darstellung im Diagramm zeigt den Tagesdurchschnitt."
+
+explainer_screentime_work = "<strong>Arbeits-/Lernbezogene Mediennutzung</strong>: Diese Frage erfasst, wie viele Minuten der letzten zwei Stunden Sie mit digitalen Medien für Arbeit oder Schule/Studium verbracht haben. Die Darstellung im Diagramm zeigt an wie viele Minuten Mediennutzung im Durchschnitt für die letzten zwei Stunden angegeben wurde."
+
+explainer_screentime_leisure = "<strong>Freizeitbezogene Mediennutzung</strong>: Diese Frage erfasst, wie viele Minuten der letzten zwei Stunden Sie digitale Medien zur Unterhaltung, Entspannung, privaten sozialen Interaktionen, etc. genutzt haben. Die Darstellung im Diagramm zeigt an wie viele Minuten Mediennutzung im Durchschnitt für die letzten zwei Stunden angegeben wurde."
+
+explainer_procra = "<strong>Prokrastination</strong>: Prokrastination misst das Ausmaß, zu dem Sie Dinge, die Sie erledigen wollten, ohne guten Grund herausgezögert haben. Prokrastination kann negative Auswirkungen haben, z. B. durch Schuldgefühle aufgrund des Aufschiebens. Hohe Werte bedeuten, dass Aufgaben verstärkt verzögert wurden. Die Darstellung im Diagramm zeigt den Tagesdurchschnitt."
+
+explainer_disco = "<strong>Einschränkung digitaler Medien</strong>: Diese Variable zeigt den Durchschnitt zwischen allen Kategorien digitaler Medien, auf die Sie verzichtet haben, z. B. Geräte oder bestimmte Interaktionen. Werte näher an 1 zeigen an, dass auf viele Kategorien verzichtet wurde und Werte näher an 0 zeigen, dass auf wenige Kategorien verzichtet wurde. Die Darstellung im Diagramm zeigt den Tagesdurchschnitt."
+
+explainer_goal_conf = "<strong>Zielkonflikt</strong>: Diese Frage zielte darauf ab zu erfassen, ob Sie empfinden, dass Ihre Mediennutzung im Konflikt mit anderen wichtigen Zielen stand. Manchmal halten uns digitale Medien davon ab, Dinge zu erledigen, die wir eigentlich machen sollten oder wollen, z. B. E-Mails können vom Entspannen abhahlten oder Kurzvideos vom Lernen. Hohe Werte auf der Skala von 1 bis 7 zeigen ein hohes Ausmaß von Zielkonflikten an. Die Darstellung im Diagramm zeigt den Tagesdurchschnitt."
 
 ```
 
@@ -219,14 +225,11 @@ sidebarLayout(
       uiOutput("slider_panel"),
     
       #displaying unsubmit button
-      div(uiOutput("unsubmit"), style = "float:right; margin-top:20%")
+      div(uiOutput("unsubmit"), style = "float:right; margin-top:20%"),
       
-      
-      
-      
-      
-      
-      
+      # displaying information text
+      htmlOutput("variable_info_1"),
+      htmlOutput("variable_info_2")
     )
   )
 )
@@ -310,7 +313,7 @@ server = function(input, output, session) {
   })
   
   #rendering breaks
-  output$login_instructions = renderUI({if(clicked_r() == 0)HTML("<h4>Bitte geben Sie ihre Login-Daten ein</h4>")})
+  output$login_instructions = renderUI({if(clicked_r() == 0)HTML("<h4>Bitte geben Sie ihre Login-Daten ein</h4><p>Geben Sie Ihre Pin ohne führende Nullen an</p>")})
   output$break_1 = renderUI({if(auth())HTML("<h4><strong>Variable auswählen</strong></h4>")})
   output$break_2 = renderUI({if(auth())HTML("<br><br><hr><h4><strong>Weitere Variable hinzufügen</strong></h4>")})
   
@@ -352,7 +355,6 @@ server = function(input, output, session) {
     clicked_r(0)
   })
   
-  
   #Displaying error messages   
   output$text = renderText({
     if(
@@ -393,8 +395,6 @@ server = function(input, output, session) {
     else {FALSE}
   })
   
-
-
  #rendering htmloutput to display Legend for second y-variable
   output$var_selection_legend_1 = renderUI(
     if(auth())
@@ -425,7 +425,8 @@ server = function(input, output, session) {
       )
     }
   })
- #rendering htmloutput to display Legend for second y-variable
+ 
+  #rendering htmloutput to display Legend for second y-variable
   output$var_selection_legend_2 = renderUI(
     if(auth())
     {
@@ -442,7 +443,8 @@ server = function(input, output, session) {
       '))
     }
   )
-#rendering output for selecting the second variable
+
+  #rendering output for selecting the second variable
   output$var_selection_2 = renderUI({
     if(auth())
     {
@@ -456,7 +458,7 @@ server = function(input, output, session) {
     }
   })
   
-#rendering output for selecting first regression line
+# Rendering output for selecting first regression line
   output$reg_selection_1 = renderUI({
     if(auth())
     {
@@ -492,7 +494,7 @@ server = function(input, output, session) {
       tagList(
         # Input: slecting smoothing
          selectInput(inputId = "mean_selection_1",
-                label = paste0('Optional: Vergleich mit Gruppenmittelwert für ', 
+                label = paste0('Optional: Vergleich mit Gesamtmittelwert für ', 
                                names(which(selectable_variables == input$var_selection_1, 
                                            " anzeigen?"))),
                 choices = c("Nein" = 0, "Ja" = 1),
@@ -509,7 +511,7 @@ server = function(input, output, session) {
       tagList(
         # Input: slecting smoothing
          selectInput(inputId = "mean_selection_2",
-                label = paste0('Optional: Vergleich mit Gruppenmittelwert für ', 
+                label = paste0('Optional: Vergleich mit Gesamtmittelwert für ', 
                                names(which(selectable_variables == input$var_selection_2, 
                                            " anzeigen?"))),
                 choices = c("Nein" = 0, "Ja" = 1),
@@ -539,17 +541,27 @@ server = function(input, output, session) {
       }
     })
   
+  # Rendering information text
+  output$variable_info_1 = renderText(
+    if(input$var_selection_1 != "0" & auth())
+    {
+      eval(as.name(paste0("explainer_", input$var_selection_1)))
+    }
+  )
+  
 
   #Generating filtered data
   data_r = reactive({
       if (
-        as.numeric(pin_r()) %in% as.numeric(data_log$pin) & study_version_r() == 1 & clicked_r() == 1 & toString(access_r()) == acess_code_master
+        as.numeric(pin_r()) %in% as.numeric(data_log$pin) & study_version_r() == 1 & clicked_r() == 1 &
+        toString(access_r()) == acess_code_master
       )
       {
         data_log %>% filter(pin == pin_r())
       }
       else if (
-        as.numeric(pin_r()) %in% as.numeric(data_nol$pin) & study_version_r() == 2 & clicked_r() == 1 & toString(access_r()) == acess_code_master
+        as.numeric(pin_r()) %in% as.numeric(data_nol$pin) & study_version_r() == 2 & clicked_r() == 1 &
+        toString(access_r()) == acess_code_master
       )
       {
         data_nol %>%  filter(pin == pin_r())
@@ -566,13 +578,13 @@ server = function(input, output, session) {
         as.numeric(pin_r()) %in% as.numeric(data_log$pin) & study_version_r() == 1 & clicked_r() == 1 & toString(access_r()) == acess_code_master
       )
       {
-        slope_log
+        means
       }
       else if (
         as.numeric(pin_r()) %in% as.numeric(data_nol$pin) & study_version_r() == 2 & clicked_r() == 1 & toString(access_r()) == acess_code_master
       )
       {
-        slope_nol
+        means
       }
       else
       {
@@ -615,7 +627,7 @@ plot = reactive({
         by = eval(as.name(paste0("scale_breaks_", toString(input$var_selection_1))))), 
       limits = c(
         eval(as.name(paste0("scale_min_", toString(input$var_selection_1)))),
-        eval(as.name(paste0("scale_max_", toString(input$var_selection_1))))),
+        eval(as.name(paste0("scale_max_", toString(input$var_selection_1)))))
     ) +
     theme_bw()+
     theme(
@@ -652,11 +664,17 @@ plot = reactive({
         # )
         ),
         breaks = seq(
-          eval(as.name(paste0("scale_min_", toString(input$var_selection_1)))),                     #using pre-defined minimum and maximum values
+          eval(as.name(paste0("scale_min_", toString(input$var_selection_1)))), #using pre-defined minimum and maximum values
           eval(as.name(paste0("scale_max_", toString(input$var_selection_1)))), 
           by = eval(as.name(paste0("scale_breaks_", toString(input$var_selection_1))))), 
-        limits = c(
-          eval(as.name(paste0("scale_min_", toString(input$var_selection_1)))),
+        limits = c(        
+          ifelse(
+            exists(paste0("scale_min_", toString(input$var_selection_2))),
+            min(
+              eval(as.name(paste0("scale_min_", toString(input$var_selection_2)))),
+              eval(as.name(paste0("scale_min_", toString(input$var_selection_1))))),
+            eval(as.name(paste0("scale_min_", toString(input$var_selection_1))))
+            ),
           eval(as.name(paste0("scale_max_", toString(input$var_selection_1))))),
     )               
   }+
@@ -666,8 +684,8 @@ plot = reactive({
     axis.text=element_text(size=12),
     axis.title=element_text(size=14,face="bold")
     )+
-    {if(input$mean_selection_1 != 0) geom_abline(intercept = as.numeric(slope_r()[paste0("intercept_", input$var_selection_1)]), slope = as.numeric(slope_r()[paste0("slope_", input$var_selection_1)]), color = color_1, alpha = .3, size = 4)} +
-    {if(input$mean_selection_2 != 0 & input$var_selection_2 !=0) geom_abline(intercept = as.numeric(slope_r()[paste0("intercept_", input$var_selection_2)])/coeff(), slope = as.numeric(slope_r()[paste0("slope_", input$var_selection_2)])/coeff(), color = color_2, alpha = .3, size = 4, linetype = "longdash")} 
+    {if(input$mean_selection_1 != 0) geom_abline(intercept = as.numeric(slope_r()[paste0("mean_", input$var_selection_1)]), slope = 0, color = color_1, alpha = .3, size = 4)} +
+    {if(input$mean_selection_2 != 0 & input$var_selection_2 !=0) geom_abline(intercept = as.numeric(slope_r()[paste0("mean_", input$var_selection_2)])/coeff(), slope = 0, color = color_2, alpha = .3, size = 4, linetype = "longdash")} 
 
     
 
@@ -684,8 +702,6 @@ plot = reactive({
     plot()
      }
     }, res = 72)
-
-
 }
 ```
 
