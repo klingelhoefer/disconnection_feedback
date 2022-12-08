@@ -1,4 +1,4 @@
-# disconnection_feedback
+# Feedback for Particpants in the Study Momentary Digital Disconnection
 
 Includes the code needed to provide feedback for participants who participated in the study on digital disconnection.
 
