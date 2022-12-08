@@ -5,9 +5,9 @@ account: klingelhoefer
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 7808311
-bundleId: 6589428
+bundleId: 6610838
 url: https://klingelhoefer.shinyapps.io/Feedback/
-when: 1670169102.98266
-lastSyncTime: 1670169102.98267
+when: 1670512285.24535
+lastSyncTime: 1670512285.24535
 asMultiple: FALSE
 asStatic: FALSE
