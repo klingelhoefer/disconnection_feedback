@@ -8,6 +8,8 @@
 **/data
 /pretest/data
 
+rsconnect
+
 *.csv
 *.tsv
 *.xlsx
